@@ -1,6 +1,7 @@
 import express from "express";
 import { runMigrations } from "./db.js";
 import { authRouter } from "./routes/auth.js";
+import { dashboardsRouter } from "./routes/dashboards.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 
 const app = express();
@@ -13,6 +14,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use(authRouter);
+app.use(dashboardsRouter);
 
 app.get("/me", requireAuth, (req, res) => {
   res.json({ user: req.user });
