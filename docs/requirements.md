@@ -14,14 +14,25 @@ mobile apps, full RBAC hierarchy. Tracked as future work.
 |---|---|
 | Viewer | Watches live dashboards, no edit rights |
 | Editor | Creates/edits dashboards, widgets, layouts |
-| Admin | Manages users, API keys, data sources |
+| Admin | Manages users, API keys, data sources (system-level, not dashboard-level) |
 | Service Account | External apps pushing events via ingestion API |
+
+**Note on roles (updated after Sprint 1 design review):** Role is **per-dashboard**, not
+a single global label on the user. A user can be an Editor on one dashboard and a Viewer
+(or have no access at all) on another. `users.role` is retained only for
+system-level admin — someone who can manage all users/dashboards/API keys. Regular
+dashboard access is governed entirely by `dashboard_collaborators` (see Data
+Requirements). This distinction exists because FR13 (Sprint 7 collaborative editing)
+requires multiple named users to share edit rights on the same dashboard, which a single
+global role cannot express.
 
 ## 3. Functional Requirements
 
 **Auth & Authorization**
 - FR1: Sign up / log in (JWT-based)
-- FR2: Role-based access (Viewer/Editor/Admin) per dashboard
+- FR2: Role-based access control **per dashboard** (Viewer/Editor), via
+  `dashboard_collaborators`. The dashboard owner always has full CRUD. System Admins
+  (global `users.role = admin`) can manage all dashboards regardless of membership.
 - FR3: Service accounts get API keys for ingestion, separate from user auth
 
 **Event Ingestion**
@@ -40,7 +51,9 @@ mobile apps, full RBAC hierarchy. Tracked as future work.
 - FR12: Add/configure widgets (metric, chart type, time range)
 
 **Collaborative Editing**
-- FR13: Multiple users edit the same dashboard layout concurrently
+- FR13: Multiple users edit the same dashboard layout concurrently. Requires the
+  editing users to be listed in `dashboard_collaborators` for that dashboard (or be
+  the owner) — see FR2.
 - FR14: Conflicting edits resolve deterministically, no data loss (CRDT)
 - FR15: Presence indicators for active editors
 
@@ -69,8 +82,13 @@ mobile apps, full RBAC hierarchy. Tracked as future work.
 
 ## 5. Data Requirements
 
-- **Users** — id, email, password_hash, role
+- **Users** — id, email, password_hash, role *(system-level admin flag only — not
+  used for dashboard-level permissions, see FR2)*
 - **Dashboards** — id, owner_id, layout_json, created_at
+- **Dashboard_Collaborators** *(added Sprint 1, supersedes a single global role for
+  dashboard access)* — dashboard_id, user_id, role (`viewer` | `editor`), created_at.
+  Composite primary key (dashboard_id, user_id). No row for a given user on a given
+  dashboard means no access (private by default), unless that user is the owner.
 - **Widgets** — id, dashboard_id, type, metric_query, position
 - **Events** (Kafka topic) — event_name, source, payload, timestamp, event_id
 - **Aggregates** — metric_name, window_start, window_size, value
@@ -82,6 +100,10 @@ mobile apps, full RBAC hierarchy. Tracked as future work.
 - WS servers stateless — session/presence state lives in Redis
 - Collaborative editing uses CRDT/OT, not last-write-wins
 - Aggregation is idempotent — safe to reprocess on consumer restart
+- Dashboard-level authorization always checks `dashboard_collaborators` (plus
+  owner_id and system-admin override) — never a single global role field, so that
+  Sprint 7's collaborative editing has a membership model to build on without
+  a schema rework.
 
 ## 7. Acceptance Criteria
 
@@ -89,3 +111,5 @@ mobile apps, full RBAC hierarchy. Tracked as future work.
 - Kill one WS gateway instance mid-session → clients reconnect within 3s, no state loss
 - Two users edit the same widget concurrently → both converge to the same final state
 - Ingestion API returns 429 above 100 req/sec from a single API key
+- A Viewer-role collaborator can read a dashboard but gets 403 on write endpoints
+- A dashboard owner can add/remove collaborators and change their role
