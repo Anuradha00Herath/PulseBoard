@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "lint": "echo \"(lint stub) no linter configured yet\" && exit 0",
-    "test": "echo \"(test stub) no tests yet\" && exit 0"
+    "test": "node --test"
   },
   "dependencies": {
     "express": "^4.19.2",

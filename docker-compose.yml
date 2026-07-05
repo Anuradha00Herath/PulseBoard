@@ -69,8 +69,13 @@ services:
     environment:
       PORT: 4001
       DATABASE_URL: postgres://pulseboard:pulseboard@postgres:5432/pulseboard
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   ingestion-service:
@@ -83,11 +88,16 @@ services:
       PORT: 4002
       KAFKA_BROKER: kafka:9092
       REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:4001
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      KAFKAJS_NO_PARTITIONER_WARNING: "1"
     depends_on:
       kafka:
         condition: service_healthy
       redis:
         condition: service_healthy
+      auth-service:
+        condition: service_started
 
   aggregation-service:
     build: ./services/aggregation-service
