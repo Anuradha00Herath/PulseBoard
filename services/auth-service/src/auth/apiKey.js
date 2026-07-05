@@ -20,3 +20,9 @@ export function generateApiKey() {
     prefix: raw.slice(0, KEY_PREFIX.length + PREFIX_VISIBLE_CHARS),
   };
 }
+
+// Redis write-through cache key (see docs/sprint2-design.md #1). ingestion-service
+// computes this same hash+key format independently to read the cache.
+export function apiKeyCacheKey(hash) {
+  return `apikey:${hash}`;
+}

@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
-import { generateApiKey } from "../auth/apiKey.js";
+import { generateApiKey, apiKeyCacheKey } from "../auth/apiKey.js";
 import { createApiKey, listApiKeys, findApiKeyById, revokeApiKey } from "../models/apiKey.js";
+import { redis } from "../redis.js";
 
 export function validateApiKeyInput({ name } = {}) {
   const errors = [];
@@ -37,6 +38,14 @@ apiKeysRouter.post("/api-keys", async (req, res, next) => {
     const { raw, hash, prefix } = generateApiKey();
     const apiKey = await createApiKey({ name, keyHash: hash, keyPrefix: prefix });
 
+    // Write-through so ingestion-service's hot path never has to hit Postgres
+    // (see docs/sprint2-design.md #1). No TTL: presence/absence in Redis IS the
+    // source of truth here, not an expiring cache.
+    await redis.set(
+      apiKeyCacheKey(hash),
+      JSON.stringify({ valid: true, name: apiKey.name, keyId: apiKey.id })
+    );
+
     // The raw key is returned exactly once, here, and is never persisted or
     // retrievable again — only its hash and display prefix are stored.
     res.status(201).json({ apiKey: toPublicApiKey(apiKey), key: raw });
@@ -62,6 +71,10 @@ apiKeysRouter.delete("/api-keys/:id", async (req, res, next) => {
     }
 
     await revokeApiKey(req.params.id);
+    // Always delete regardless of whether the DB row was already revoked, so a
+    // prior crash between the DB write and this delete can't leave a revoked
+    // key still resolving to valid:true in Redis.
+    await redis.del(apiKeyCacheKey(existing.key_hash));
     res.status(204).end();
   } catch (err) {
     next(err);

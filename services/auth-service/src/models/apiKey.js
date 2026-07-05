@@ -20,8 +20,16 @@ export async function listApiKeys() {
 
 export async function findApiKeyById(id) {
   const { rows } = await pool.query(
-    `SELECT id, name, key_prefix, created_at, revoked_at FROM api_keys WHERE id = $1`,
+    `SELECT id, name, key_prefix, key_hash, created_at, revoked_at FROM api_keys WHERE id = $1`,
     [id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function findApiKeyByHash(hash) {
+  const { rows } = await pool.query(
+    `SELECT id, name FROM api_keys WHERE key_hash = $1 AND revoked_at IS NULL`,
+    [hash]
   );
   return rows[0] ?? null;
 }
