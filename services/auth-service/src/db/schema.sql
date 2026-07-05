@@ -31,3 +31,16 @@ CREATE TABLE IF NOT EXISTS widgets (
   metric_query TEXT NOT NULL,
   position JSONB NOT NULL DEFAULT '{}'
 );
+
+-- FR3: service-account credentials for ingestion-service (Sprint 2), separate
+-- from user JWT auth. Only key_hash (SHA-256) is stored; the raw key is
+-- returned once at creation and never persisted. key_prefix is safe to display
+-- (not sufficient to reconstruct the key) so admins can identify a key to revoke.
+CREATE TABLE IF NOT EXISTS api_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revoked_at TIMESTAMPTZ
+);
