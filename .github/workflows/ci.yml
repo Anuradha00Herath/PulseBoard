@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-services:
+    name: Lint & test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - ingestion-service
+          - aggregation-service
+          - ws-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: services/${{ matrix.service }}/package.json
+
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: npm install
+
+      - name: Lint
+        working-directory: services/${{ matrix.service }}
+        run: npm run lint
+
+      - name: Test
+        working-directory: services/${{ matrix.service }}
+        run: npm test
+
+  frontend:
+    name: Lint & build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+  docker-build:
+    name: Verify all Dockerfiles build
+    runs-on: ubuntu-latest
+    needs: [backend-services, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build auth-service image
+        run: docker build -t pulseboard/auth-service ./services/auth-service
+
+      - name: Build ingestion-service image
+        run: docker build -t pulseboard/ingestion-service ./services/ingestion-service
+
+      - name: Build aggregation-service image
+        run: docker build -t pulseboard/aggregation-service ./services/aggregation-service
+
+      - name: Build ws-gateway image
+        run: docker build -t pulseboard/ws-gateway ./services/ws-gateway
+
+      - name: Build frontend image
+        run: docker build -t pulseboard/frontend ./frontend
